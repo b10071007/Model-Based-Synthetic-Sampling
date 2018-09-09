@@ -7,6 +7,7 @@ library(rpart)
 library(MASS)
 library(e1071)
 library(kknn)
+library(ebmc)
 
 ## test ##
 if(FALSE){
@@ -652,8 +653,28 @@ MBS_SVR = function(feature,label,over_rate,iteration){
 }
 ####################################################### 
 
-##### MBS with KNN regression #####
-MBS_KNN = function(feature,label,over_rate,iteration){
+# Weight update/ pseudo-loss calculation for AdaBoost.M2
+.wt.update <- function(probability, prediction, actual, wt, smooth)
+{
+  fp <- which(ifelse(prediction == "1" & actual == "0", TRUE, FALSE) == TRUE)
+  fn <- which(ifelse(prediction == "0" & actual == "1", TRUE, FALSE) == TRUE)
+  p_loss <- 0.5 * sum( wt[fp] * (1 - probability[fp, ][ ,"0"] + probability[fp, ][ ,"1"]),  # pseudo-loss
+                       wt[fn] * (1 - probability[fn, ][ ,"1"] + probability[fn, ][ ,"0"]) )
+  a <- (p_loss + smooth) / (1 - p_loss + smooth) # weight updater with prediction smoothing, dealing with a == 0
+  wt[c(fp, fn)] <- rep(1/(length(fp) + length(fn)), (length(fp) + length(fn)))
+  wt[fn] <- wt[fn] * a^(0.5 * (1 + probability[fn, ][ ,"1"] - probability[fn, ][ ,"0"]))
+  wt[fp] <- wt[fp] * a^(0.5 * (1 + probability[fp, ][ ,"0"] - probability[fp, ][ ,"1"]))
+  wt <- wt / sum(wt)
+  result <- list()
+  result[[1]] <- wt
+  result[[2]] <- a
+  return(result)
+}
+
+##### MBSBoost #####
+MBS_forBoost = function(feature,label,over_rate,iteration=5){
+  # over_rate: over-sampling rate
+  # iteration: iteration for step 3 of MBS
   ## get minority 
   minClass = levels(label)[which.min(table(label))]
   minIndex = which(label == minClass)
@@ -675,20 +696,81 @@ MBS_KNN = function(feature,label,over_rate,iteration){
     for(i in 1:n_col){
       # train feature model
       fo = as.formula( paste(names(feature)[i]," ~ .",sep="") )
-      model = kknn(fo,minority,Rset[,-i])
+      model = lm(fo,minority)
       # predict feature
-      predict_set[,i] = fitted(model)
+      predict_set[,i] = predict( model, Rset[,-i] )
     }
     Rset = predict_set
   }
-  predict_set$Label = minClass
+  predict_set$w[predict_set$w<0] = 0
   ## merge data
-  MBS_train = feature
-  MBS_train$Label = label
-  MBS_train = rbind(MBS_train,predict_set)
-  MBS_train = shuffle(MBS_train)
+  MBS_train = rbind(minority,predict_set)
+  MBS_train$Label = minClass
   return(MBS_train)
 }
+
+MBSBoost = function (formula, data, size, alg, over_rate = 1, rf.ntree = 50, 
+                     svm.ker = "radial") {
+  target <- gsub(" ", "", unlist(strsplit(format(formula), 
+                                          split = "~"))[1])
+  list_model <- list()
+  a <- 0
+  n <- data[which(data[, target] == "0"), ]
+  p <- data[which(data[, target] == "1"), ]
+  data$w <- rep(1/nrow(data), nrow(data))
+  label <- data[, target]
+  for (i in 1:size) {
+    n <- data[which(data[, target] == "0"), ]
+    f <- reformulate(paste(colnames(data)[which(colnames(data) != 
+                                                  target & colnames(data) != "w")], collapse = "+"), 
+                     response = target)
+    feature = data[, colnames(data) != target]
+    
+    MBS_set = MBS_forBoost(feature, label, over_rate=eval(over_rate),iteration=5)
+    
+    train <- rbind(n, MBS_set)
+    train$w <- train$w/sum(train$w)
+    train <- train[sample(nrow(train), nrow(train), replace = TRUE, 
+                          prob = train$w), ]
+    train$w <- NULL
+    if (alg == "svm") {
+      list_model[[i]] <- e1071::svm(formula, data = train, 
+                                    kernel = svm.ker, probability = TRUE)
+      prob <- as.data.frame(attr(predict(list_model[[i]], 
+                                         data, probability = TRUE), "prob"))
+    }
+    else if (alg == "cart") {
+      list_model[[i]] <- rpart::rpart(formula, data = train)
+      prob <- as.data.frame(predict(list_model[[i]], data, 
+                                    type = "prob"))
+    }
+    else if (alg == "c50") {
+      list_model[[i]] <- C50::C5.0(formula, data = train)
+      prob <- as.data.frame(predict(list_model[[i]], data, 
+                                    type = "prob"))
+    }
+    else if (alg == "nb") {
+      list_model[[i]] <- e1071::naiveBayes(formula, data = train)
+      prob <- as.data.frame(predict(list_model[[i]], data, 
+                                    type = "raw"))
+    }
+    else if (alg == "rf") {
+      list_model[[i]] <- randomForest::randomForest(formula, 
+                                                    data = train, ntree = rf.ntree)
+      prob <- as.data.frame(predict(list_model[[i]], data, 
+                                    type = "prob"))
+    }
+    pred <- as.factor(ifelse(prob[, "1"] >= 0.5, 1, 0))
+    new <- .wt.update(probability = prob, prediction = pred, 
+                      actual = label, wt = data$w, smooth = 1/nrow(data))
+    data$w <- new[[1]]
+    a[i] <- new[[2]]
+  }
+  result <- list(weakLearners = list_model, errorEstimation = a)
+  attr(result, "class") <- "modelBst"
+  return(result)
+}
+
 ################################################################
 }
 ################################################################

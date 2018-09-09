@@ -1,0 +1,5 @@
+"Method","AUC_mean","AUC_std","AUC_rank"
+"Original",0.867779982743745,0,2
+"MBSBoost",0.999866566005177,0.00014026131977221,1
+"RUSBoost",0.5,0,3
+"UnderBagging",0.5,0,3
