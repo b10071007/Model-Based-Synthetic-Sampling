@@ -1,6 +1,7 @@
 "# Model-Based-Synthetic-Sampling" 
 
 Dataset description
+
 Pima Indians Diabetes \\
 This dataset is originated from the National Institutes of Health, and it is used to identify whether people suffer from diabetes or not based on personal information and physiological indices. The percentage of patients with diabetes is 34.9\%.
     
