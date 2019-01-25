@@ -1,5 +1,5 @@
 ##### Ensemble_based method experiment #####
-No = "Ensemble_exp" # 2000 500
+No = "Ensemble_exp_All_"
 
 ##### library #####
 library(caret)
@@ -8,7 +8,9 @@ library(mice)
 library(caTools)
 library(dplyr)
 library(ebmc)
-setwd("D:/Github/Model-Based-Synthetic-Sampling/code")
+
+rootPath = "D:/Github/Model-Based-Synthetic-Sampling/code"
+setwd(rootPath)
 source("Data information.R")
 source("Sampling methods.R")
 
@@ -21,6 +23,7 @@ test_ratio = 0.4
 imputation = list(m=5, method="mean")
 over_rate = 1
 under_rate = 0.5
+num_tree = 20
 name_index=c("Original","MBSBoost","RUSBoost","UnderBagging")
 
 #--------------------------------------------------------#
@@ -28,7 +31,7 @@ name_index=c("Original","MBSBoost","RUSBoost","UnderBagging")
 ## time calculation ##
 start_time = format(Sys.time())
 Time = rep(0,length(Total))
-sampling_Time = as.data.frame(matrix(0,nrow=length(Total),ncol=length(name_index)-1))
+sampling_Time = as.data.frame(matrix(0,nrow=length(Total),ncol=length(name_index)))
 names(sampling_Time) = name_index[-1]
 
 #--------------------------------------------------------#
@@ -41,8 +44,9 @@ Result_total = list(AUC_mean_total, AUC_std_total, AUC_rank_total)
 result_path_each = paste(result_path, No, sep='')
 build_path(result_path_each)
 
-for( Data_Index in 1:8 ){
+for( Data_Index in 1:length(Total) ){
   Data = Total[[Data_Index]]
+  cat(paste("[",Data_Index,"] ", sep=""))
   cat(format(Sys.time()))
   cat(paste(" start to run",Data$data_name))
   cat("\n")
@@ -63,6 +67,7 @@ for( Data_Index in 1:8 ){
   
   for (s in 1:length(split_seed)){
     ##### split data #####
+    test_result[((s-1)*sample_times+1):((s)*sample_times) ,1] = split_seed[s]
     cat(paste("No.",s," splitting",sep=""))
     cat("\n")
     set.seed(split_seed[s])
@@ -71,7 +76,7 @@ for( Data_Index in 1:8 ){
     test = data[index_test,]
     maj_size = max(table(train$Label))
     min_size = min(table(train$Label))
-    IR = min_size/maj_size*(1+over_rate)
+    IR = maj_size/min_size/(1+over_rate)
     m = maj_size/(min_size*(1+over_rate))
     B = min_size*over_rate/(maj_size-min_size)
     
@@ -94,16 +99,6 @@ for( Data_Index in 1:8 ){
     train[is.na(train)] = 0
     test[is.na(test)] = 0
     
-    ##### train model of original data #####
-    train_LR = function(data){
-      model = glm(Label~., data = data, family = "binomial")
-      return(model)
-    }
-    LR_original <- train_LR(train)
-    test_pred = predict(LR_original, newdata = test[-1], type = "response")
-    Original_AUC = colAUC(test_pred , test$Label)
-    test_result[((s-1)*sample_times+1):((s)*sample_times) ,1] = split_seed[s]
-    test_result[((s-1)*sample_times+1):((s)*sample_times) ,3] = as.numeric(Original_AUC)
     gc()
     
     ##### set sample seed #####
@@ -143,8 +138,8 @@ for( Data_Index in 1:8 ){
       # test result
       for(i in 1:length(Model_list)){
         pred = predict(Model_list[i], newdata = test[-1])[[1]]
-        test_result[(s-1)*sample_times+k,i+3] = colAUC(pred , test$Label)
-
+        test_result[(s-1)*sample_times+k,i+2] = colAUC(pred , test$Label)
+        
       } # end of prediction loop
       
       #--------------------------------------------------------#
@@ -168,7 +163,7 @@ for( Data_Index in 1:8 ){
                            AUC_rank = AUC_rank)
   Result_name = paste(No, Total[[Data_Index]]$data_name, 
                       "result.csv",sep="")
-  write.csv(performance, Result_name,row.names = F)
+  write.csv(performance, Result_name, row.names = F)
   
   Result_total[[1]][Data_Index,] = AUC_mean
   Result_total[[2]][Data_Index,] = AUC_std
@@ -187,6 +182,14 @@ write.csv(sampling_Time/100,
 
 paste(paste("Execution time is", Time/60, "minutes"))
 cat(paste("Total execution time is",sum(Time)/60, "minutes") )
+
+Data_name=''
+for( Data_Index in 1:length(Total) ){
+  Data = Total[[Data_Index]]
+  Data_name = c(Data_name, Data$data_name )
+}
+Data_name = Data_name[-1]
+
 execution_time = data.frame(Data = Data_name, Execution_time = Time/60)
 write.csv(execution_time,
           paste(No,"execution_time.csv",sep=""),
@@ -198,5 +201,4 @@ setwd(result_path)
 write.csv(Result_total[[1]], paste(No, "AUC_mean_total.csv",sep=""), row.names = F)
 write.csv(Result_total[[2]], paste(No, "AUC_std_total.csv",sep=""), row.names = F)
 write.csv(Result_total[[3]], paste(No, "AUC_rank_total.csv",sep=""), row.names = F)
-
 

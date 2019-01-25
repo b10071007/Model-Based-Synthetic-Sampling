@@ -9,22 +9,12 @@ library(e1071)
 library(kknn)
 library(ebmc)
 
-## test ##
-if(FALSE){
-  feature = train[-1]
-  label = train$Label
-  over_rate = 1
-  N=1
-  K=5
-  Nclusters=5
-  iteration=5
-}
 shuffle = function(train_data){
   n_row = nrow(train_data)
   train_data = train_data[sample(n_row,n_row),]
   return(train_data)
 }
-##########################################
+#----------------------------------------------------------------#
 
 ####################################################
 ##### original method and cluster-based method #####
@@ -50,7 +40,7 @@ overSample = function(feature,label,over_rate=1){ # over_rate: over-sampling rat
   over_train = shuffle(over_train)
   return(over_train)
 }
-####################################################
+#----------------------------------------------------------------#
 
 ##### Random Under-sampling #####
 underSample = function(feature,label,under_rate=0.5){ # under_rate: under-sampling rate
@@ -74,8 +64,7 @@ underSample = function(feature,label,under_rate=0.5){ # under_rate: under-sampli
   under_train = shuffle(under_train)
   return(under_train)
 }
-####################################################
-
+#----------------------------------------------------------------#
 
 ##### cluster-based over-sampling(CBO) #####
 CBO = function(feature,label,IR=1,Nclusters=4){ 
@@ -130,7 +119,8 @@ CBO = function(feature,label,IR=1,Nclusters=4){
   CBO_train = shuffle(CBO_train)
   return(CBO_train)
 }
-####################################################
+
+#----------------------------------------------------------------#
 
 ##### under-sampling based on clustering(SBC) #####
 SBC = function(feature,label,m=1,Nclusters=5){
@@ -188,9 +178,9 @@ SBC = function(feature,label,m=1,Nclusters=5){
   SBC_train = shuffle(SBC_train)
   return(SBC_train)
 }
-################################################################
+#----------------------------------------------------------------#
 }
-################################################################
+#----------------------------------------------------------------#
 
 
 #################################### 
@@ -239,7 +229,7 @@ smote = function(feature,label,N=1,K=5){
   smote_train = shuffle(smote_train)
   return(smote_train)
 }
-####################################################
+#----------------------------------------------------------------#
 
 ### Borderline-SMOTE 1 ###
 border_smote1 = function(feature,label,N=1 ,K=5){
@@ -310,7 +300,7 @@ border_smote1 = function(feature,label,N=1 ,K=5){
   smote_train = shuffle(smote_train)
   return(smote_train)
 }
-####################################################
+#----------------------------------------------------------------#
 
 ### Borderline-SMOTE 2 ###
 border_smote2 = function(feature,label,N=1 ,K=5){
@@ -395,7 +385,7 @@ border_smote2 = function(feature,label,N=1 ,K=5){
   smote_train = shuffle(smote_train)
   return(smote_train)
 }
-####################################################
+#----------------------------------------------------------------#
 
 ### Safe-level-SMOTE ###
 safe_smote = function(feature,label,N=1 ,K=5){
@@ -463,7 +453,7 @@ safe_smote = function(feature,label,N=1 ,K=5){
   smote_train = shuffle(smote_train)
   return(smote_train)
 }
-####################################################
+#----------------------------------------------------------------#
 
 ### ADASYN ###
 ADASYN = function(feature,label,B=1,K=5){
@@ -518,9 +508,9 @@ ADASYN = function(feature,label,B=1,K=5){
   smote_train = shuffle(smote_train)
   return(smote_train)
 }
-################################################################
+#----------------------------------------------------------------#
 }
-################################################################
+#----------------------------------------------------------------#
 
 
 ##################################
@@ -566,8 +556,77 @@ MBS = function(feature,label,over_rate,iteration=5){
   MBS_train = shuffle(MBS_train)
   return(MBS_train)
 }
-####################################################### 
 
+#----------------------------------------------------------------#
+
+##### Functions for MBSBoost and MBSFast #####
+### build feature model for MBS ### 
+featureModel = function(minority) {
+  n_col = ncol(minority)
+  FModel_list = list()
+  for(i in 1:n_col){
+    fo = as.formula( paste(names(minority)[i]," ~ .",sep="") )
+    model = lm(fo,minority)
+    FModel_list[[i]] = model
+  }
+  return(FModel_list)
+}
+
+### predict feature given feature model ### 
+predicFeature = function(minority,FModel_list,over_rate,iteration) {
+  ## create random_set
+  n_col = ncol(minority)
+  min_size = round(nrow(minority) * over_rate)
+  Rset = as.data.frame(matrix(NA, nrow = min_size, ncol = n_col))
+  names(Rset) = names(minority)
+  
+  for(k in 1:n_col){
+    index = sample.int(nrow(minority), min_size, replace=TRUE)
+    Rset[,k] = minority[index,k]
+  }
+  
+  ## predict feature
+  for(it in 1:iteration){
+    predict_set = as.data.frame(matrix(NA, nrow=min_size, ncol=n_col))
+    names(predict_set) = names(minority)
+    for(i in 1:n_col){
+      # predict feature
+      predict_set[,i] = predict( FModel_list[[i]], Rset[,-i] )
+    }
+    Rset = predict_set
+  }
+  return(Rset)
+}
+
+##### Faster MBS #####
+MBSFast = function(formula, data, over_rate,iteration=5){
+          # over_rate: over-sampling rate
+          # iteration: iteration for step 3 of MBS
+  
+  target <- gsub(" ", "", unlist(strsplit(format(formula), split = "~"))[1])
+  label = data[ ,target]
+  feature = data[ ,-which(colnames(data)==target)]
+  
+  ## get minority 
+  minClass = levels(label)[which.min(table(label))]
+  minIndex = which(label == minClass)
+  minority = subset(feature,label==minClass)
+  
+  ## train feature model
+  FModel_list = featureModel(minority)
+  
+  ## predict feature
+  predict_set = predicFeature(minority, FModel_list, over_rate, iteration)
+  predict_set$Label = minClass
+  
+  ## merge data
+  orig_train = feature
+  orig_train$Label = label
+  MBS_train = rbind(orig_train,predict_set)
+  
+  return(MBS_train)
+}
+#----------------------------------------------------------------#
 ### MBS with CART ###
 MBS_CART = function(feature,label,over_rate,iteration){
       # over_rate: over-sampling rate
@@ -606,7 +665,7 @@ MBS_CART = function(feature,label,over_rate,iteration){
   MBS_train = shuffle(MBS_train)
   return(MBS_train)
 }
-####################################################### 
+#----------------------------------------------------------------#
 
 ##### MBS with SVR #####
 MBS_SVR = function(feature,label,over_rate,iteration){
@@ -651,11 +710,17 @@ MBS_SVR = function(feature,label,over_rate,iteration){
   MBS_train = shuffle(MBS_train)
   return(MBS_train)
 }
-####################################################### 
+#----------------------------------------------------------------#
+}
+#----------------------------------------------------------------#
 
+######################################
+##########  ensemble + MBS  ##########
+######################################
+if(TRUE){
+### functions for ensemble-based methods ###
 # Weight update/ pseudo-loss calculation for AdaBoost.M2
-.wt.update <- function(probability, prediction, actual, wt, smooth)
-{
+.wt.update <- function(probability, prediction, actual, wt, smooth) {
   fp <- which(ifelse(prediction == "1" & actual == "0", TRUE, FALSE) == TRUE)
   fn <- which(ifelse(prediction == "0" & actual == "1", TRUE, FALSE) == TRUE)
   p_loss <- 0.5 * sum( wt[fp] * (1 - probability[fp, ][ ,"0"] + probability[fp, ][ ,"1"]),  # pseudo-loss
@@ -671,92 +736,52 @@ MBS_SVR = function(feature,label,over_rate,iteration){
   return(result)
 }
 
-##### MBSBoost #####
-MBS_forBoost = function(feature,label,over_rate,iteration=5){
-  # over_rate: over-sampling rate
-  # iteration: iteration for step 3 of MBS
-  ## get minority 
-  minClass = levels(label)[which.min(table(label))]
-  minIndex = which(label == minClass)
-  minority = subset(feature,label==minClass)
-  ## create random_set
-  n_col = ncol(feature)
-  size = round(length(minIndex) * over_rate)
-  Rset = as.data.frame(matrix(NA, nrow = size, ncol = n_col))
-  names(Rset) = names(minority)
-  for(k in 1:n_col){
-    index = sample.int(nrow(minority), size, replace=TRUE)
-    Rset[,k] = minority[index,k]
-  }
-  
-  ## train feature model and predict
-  for(it in 1:iteration){
-    predict_set = as.data.frame(matrix(NA, nrow=size, ncol=ncol(feature)))
-    names(predict_set) = names(minority)
-    for(i in 1:n_col){
-      # train feature model
-      fo = as.formula( paste(names(feature)[i]," ~ .",sep="") )
-      model = lm(fo,minority)
-      # predict feature
-      predict_set[,i] = predict( model, Rset[,-i] )
-    }
-    Rset = predict_set
-  }
-  predict_set$w[predict_set$w<0] = 0
-  ## merge data
-  MBS_train = rbind(minority,predict_set)
-  MBS_train$Label = minClass
-  return(MBS_train)
-}
-
-MBSBoost = function (formula, data, size, alg, over_rate = 1, rf.ntree = 50, 
-                     svm.ker = "radial") {
+MBSBoost = function (formula, data, size, alg, over_rate=1, iteration=5, rf.ntree=50, 
+                      svm.ker = "radial") {
   target <- gsub(" ", "", unlist(strsplit(format(formula), 
                                           split = "~"))[1])
   list_model <- list()
   a <- 0
-  n <- data[which(data[, target] == "0"), ]
-  p <- data[which(data[, target] == "1"), ]
+  
+  # MBS
+  data = MBSFast(formula, data, over_rate,iteration=iteration)
   data$w <- rep(1/nrow(data), nrow(data))
   label <- data[, target]
+  
+  
   for (i in 1:size) {
-    n <- data[which(data[, target] == "0"), ]
     f <- reformulate(paste(colnames(data)[which(colnames(data) != 
                                                   target & colnames(data) != "w")], collapse = "+"), 
                      response = target)
-    feature = data[, colnames(data) != target]
     
-    MBS_set = MBS_forBoost(feature, label, over_rate=eval(over_rate),iteration=5)
+    trainSet <- data[sample(nrow(data), nrow(data), replace = TRUE, 
+                            prob = data$w), ]
+    trainSet$w <- NULL
     
-    train <- rbind(n, MBS_set)
-    train$w <- train$w/sum(train$w)
-    train <- train[sample(nrow(train), nrow(train), replace = TRUE, 
-                          prob = train$w), ]
-    train$w <- NULL
     if (alg == "svm") {
-      list_model[[i]] <- e1071::svm(formula, data = train, 
+      list_model[[i]] <- e1071::svm(formula, data = trainSet, 
                                     kernel = svm.ker, probability = TRUE)
       prob <- as.data.frame(attr(predict(list_model[[i]], 
                                          data, probability = TRUE), "prob"))
     }
     else if (alg == "cart") {
-      list_model[[i]] <- rpart::rpart(formula, data = train)
+      list_model[[i]] <- rpart::rpart(formula, data = trainSet)
       prob <- as.data.frame(predict(list_model[[i]], data, 
                                     type = "prob"))
     }
     else if (alg == "c50") {
-      list_model[[i]] <- C50::C5.0(formula, data = train)
+      list_model[[i]] <- C50::C5.0(formula, data = trainSet)
       prob <- as.data.frame(predict(list_model[[i]], data, 
                                     type = "prob"))
     }
     else if (alg == "nb") {
-      list_model[[i]] <- e1071::naiveBayes(formula, data = train)
+      list_model[[i]] <- e1071::naiveBayes(formula, data = trainSet)
       prob <- as.data.frame(predict(list_model[[i]], data, 
                                     type = "raw"))
     }
     else if (alg == "rf") {
       list_model[[i]] <- randomForest::randomForest(formula, 
-                                                    data = train, ntree = rf.ntree)
+                                                    data = trainSet, ntree = rf.ntree)
       prob <- as.data.frame(predict(list_model[[i]], data, 
                                     type = "prob"))
     }
@@ -771,9 +796,9 @@ MBSBoost = function (formula, data, size, alg, over_rate = 1, rf.ntree = 50,
   return(result)
 }
 
-################################################################
+#----------------------------------------------------------------#
 }
-################################################################
+#----------------------------------------------------------------#
 
 
 ##############################

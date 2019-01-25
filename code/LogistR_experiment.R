@@ -1,5 +1,5 @@
 ##### Logistic regression experiment #####
-No = "LogistR_exp_"
+No = "LogistR_exp_All_"
 
 ##### library #####
 library(caret)
@@ -7,7 +7,9 @@ library(pROC)
 library(mice)
 library(caTools)
 library(dplyr)
-setwd("D:/Github/Model-Based-Synthetic-Sampling/code")
+
+rootPath = "D:/Github/Model-Based-Synthetic-Sampling/code"
+setwd(rootPath)
 source("Data information.R")
 source("Sampling methods.R")
 
@@ -28,7 +30,7 @@ name_index=c("Original","Over","Under","CBO","SBC",
 ## time calculation ##
 start_time = format(Sys.time())
 Time = rep(0,length(Total))
-sampling_Time = as.data.frame(matrix(0,nrow=length(Total),ncol=length(name_index)-1))
+sampling_Time = as.data.frame(matrix(0,nrow=length(Total),ncol=length(name_index)))
 names(sampling_Time) = name_index[-1]
 
 #--------------------------------------------------------#
@@ -41,8 +43,10 @@ Result_total = list(AUC_mean_total, AUC_std_total, AUC_rank_total)
 result_path_each = paste(result_path, No, sep='')
 build_path(result_path_each)
 
+
 for( Data_Index in 1:length(Total) ){
   Data = Total[[Data_Index]]
+  cat(paste("[",Data_Index,"] ", sep=""))
   cat(format(Sys.time()))
   cat(paste(" start to run",Data$data_name))
   cat("\n")
@@ -52,7 +56,7 @@ for( Data_Index in 1:length(Total) ){
   setwd(Data$data_path)
   data = read.csv(paste(Data$data_name,".csv",sep = ""),header = TRUE)
   data$Label = as.factor(data$Label)
-
+  
   ### build result data frame
   set.seed(1)
   split_seed = sample.int(2000,split_times,replace = FALSE)
@@ -105,7 +109,7 @@ for( Data_Index in 1:length(Total) ){
     
     ##### set sample seed #####
     seedset = sample.int(500,sample_times,replace = FALSE)
-
+    
     #--------------------------------------------------------#
     
     ##### sampling method #####
@@ -195,11 +199,10 @@ for( Data_Index in 1:length(Total) ){
       ### MBS_train ###
       sampling_start = proc.time()[3]
       set.seed(seedset[k])
-      train10 = MBS(feature=train[-1],label=train$Label,
-                       over_rate=eval(over_rate),iteration=5)
+      train10 = MBSFast(Label~., train, over_rate=eval(over_rate),iteration=5)
       sampling_end = proc.time()[3]
       sampling_Time[Data_Index,10] = sampling_Time[Data_Index,10] + (sampling_end - sampling_start)
-    
+      
       ### MBS_CART ###
       sampling_start = proc.time()[3]
       set.seed(seedset[k])
@@ -215,9 +218,17 @@ for( Data_Index in 1:length(Total) ){
                         over_rate=eval(over_rate),iteration=5)
       sampling_end = proc.time()[3]
       sampling_Time[Data_Index,12] = sampling_Time[Data_Index,12] + (sampling_end - sampling_start)
+      
+      ### MBS_Fast ###
+      sampling_start = proc.time()[3]
+      set.seed(seedset[k])
+      train13 = MBSFast(Label~., train, over_rate=eval(over_rate),iteration=5)
+      sampling_end = proc.time()[3]
+      sampling_Time[Data_Index,13] = sampling_Time[Data_Index,13] + (sampling_end - sampling_start)
+      
       gc()
       #--------------------------------------------------------#
-    
+      
       ### Training ###
       m1 = train_LR(train1)
       m2 = train_LR(train2)
@@ -231,8 +242,9 @@ for( Data_Index in 1:length(Total) ){
       m10 = train_LR(train10)
       m11 = train_LR(train11)
       m12 = train_LR(train12)
+      m13 = train_LR(train13)
       
-      LR_list = list(m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12)
+      LR_list = list(m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12,m13)
       
       ### Testing ###
       for(i in 1:length(LR_list)){
@@ -254,13 +266,12 @@ for( Data_Index in 1:length(Total) ){
   AUC_std = lapply(split_result,function(x)apply(x[-1],2,sd)) 
   AUC_std = apply(t(as.data.frame(AUC_std)),2,mean)
   AUC_rank = rank(-AUC_mean,ties.method="min")
-
+  
   performance = data.frame(Method=names(test_result)[-1:-2],
                            AUC_mean = AUC_mean,
                            AUC_std = AUC_std, 
                            AUC_rank = AUC_rank)
-  Result_name = paste(No, Total[[Data_Index]]$data_name, 
-                      "result.csv",sep="")
+  Result_name = paste(No, Total[[Data_Index]]$data_name, "result.csv",sep="")
   write.csv(performance, Result_name,row.names = F)
   
   Result_total[[1]][Data_Index,] = AUC_mean
@@ -280,6 +291,14 @@ write.csv(sampling_Time/100,
 
 paste(paste("Execution time is", Time/60, "minutes"))
 cat(paste("Total execution time is",sum(Time)/60, "minutes") )
+
+Data_name=''
+for( Data_Index in 1:length(Total) ){
+  Data = Total[[Data_Index]]
+  Data_name = c(Data_name, Data$data_name )
+}
+Data_name = Data_name[-1]
+
 execution_time = data.frame(Data = Data_name, Execution_time = Time/60)
 write.csv(execution_time,
           paste(No,"execution_time.csv",sep=""),
@@ -291,5 +310,4 @@ setwd(result_path)
 write.csv(Result_total[[1]], paste(No, "AUC_mean_total.csv",sep=""), row.names = F)
 write.csv(Result_total[[2]], paste(No, "AUC_std_total.csv",sep=""), row.names = F)
 write.csv(Result_total[[3]], paste(No, "AUC_rank_total.csv",sep=""), row.names = F)
-
 
