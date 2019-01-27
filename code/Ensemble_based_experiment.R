@@ -24,7 +24,7 @@ imputation = list(m=5, method="mean")
 over_rate = 1
 under_rate = 0.5
 num_tree = 20
-name_index=c("Original","MBSBoost","RUSBoost","UnderBagging")
+name_index=c("MBSBoost","RUSBoost","UnderBagging")
 
 #--------------------------------------------------------#
 

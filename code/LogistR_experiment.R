@@ -219,13 +219,6 @@ for( Data_Index in 1:length(Total) ){
       sampling_end = proc.time()[3]
       sampling_Time[Data_Index,12] = sampling_Time[Data_Index,12] + (sampling_end - sampling_start)
       
-      ### MBS_Fast ###
-      sampling_start = proc.time()[3]
-      set.seed(seedset[k])
-      train13 = MBSFast(Label~., train, over_rate=eval(over_rate),iteration=5)
-      sampling_end = proc.time()[3]
-      sampling_Time[Data_Index,13] = sampling_Time[Data_Index,13] + (sampling_end - sampling_start)
-      
       gc()
       #--------------------------------------------------------#
       
@@ -242,9 +235,8 @@ for( Data_Index in 1:length(Total) ){
       m10 = train_LR(train10)
       m11 = train_LR(train11)
       m12 = train_LR(train12)
-      m13 = train_LR(train13)
       
-      LR_list = list(m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12,m13)
+      LR_list = list(m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12)
       
       ### Testing ###
       for(i in 1:length(LR_list)){
