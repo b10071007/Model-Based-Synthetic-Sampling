@@ -35,23 +35,23 @@
     This is a competition about credit scoring on Kaggle. Based on historical credit records and loan conditions, the goal is to predict whether the clients will encounter financial problem within two years.  
     https://www.kaggle.com/c/GiveMeSomeCredit
 
-+ **"Diabetes"** : 
++ **Diabetes** : 
 	The dataset, released on Kaggle, represents 10 years (1999-2008) of clinical care at 130 US hospitals and integrated delivery networks. The objective is to know if a patient will be readmitted in some hospital. We choosed "readmission in less than 30 days" as the minority class and the remainder as the majority class.  
 	https://www.kaggle.com/brandao/diabetes/home
 
-+ **"Hmeq"** : 
++ **Hmeq** : 
 	The "Home Equity dataset" (Hmeq) on Kaggle contains baseline and loan performance information for 5,960 recent home equity loans. The target is to predict clients who eventually default on their loans.  
 	https://www.kaggle.com/ajay1735/hmeq-data/home
 
-+ **"Promotion"** : 
++ **Promotion** : 
 	The "Promotion response and target datasets" is available ob Kaggle. It is used to build a model to select the best customers for second round of promotion from the pool of customers not contacted.  
 	https://www.kaggle.com/regivm/promotion-response-and-target-datasets/home
 
-+ **"Bank"** : 
++ **Bank** : 
 	The "Bank Marketing Data Set" on UCI is related to direct marketing campaigns (phone calls) of a Portuguese banking institution. The goal is to predict whether the client will subscribe a term deposit or not.  
 	https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
 
-+ **"Spambase"** :
++ **Spambase** :
 	This dataset from UCI is related to the spam mail filter. The objective is to classify email as spam or non-spam according to the content of the mail.  
 	https://archive.ics.uci.edu/ml/datasets/Spambase
 
